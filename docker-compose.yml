@@ -1,0 +1,27 @@
+services:
+  paia-ldap-proxy:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM golang:1.22-alpine AS builder
+        WORKDIR /src
+        COPY main.go /src/main.go
+        RUN go mod init github.com/czeyka/paia-ldap-proxy >/dev/null 2>&1 || true
+        RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/paia-ldap-proxy /src/main.go
+
+        FROM gcr.io/distroless/static-debian12:nonroot
+        COPY --from=builder /out/paia-ldap-proxy /paia-ldap-proxy
+        USER nonroot:nonroot
+        ENTRYPOINT ["/paia-ldap-proxy"]
+    env_file:
+      - .env
+    ports:
+      - "${LDAP_PORT:-389}:389"
+    environment:
+      LDAP_LISTEN: ":389"
+      PAIA_BASE_URL: ${PAIA_BASE_URL:-https://paia.gbv.de/}
+      PAIA_ISIL: ${PAIA_ISIL:-DE-841}
+      PAIA_AUTH_PATH: ${PAIA_AUTH_PATH:-auth}
+      PAIA_CORE_PATH: ${PAIA_CORE_PATH:-core}
+      LDAP_BASE_DN: ${LDAP_BASE_DN:-dc=library,dc=local}
+    restart: unless-stopped
