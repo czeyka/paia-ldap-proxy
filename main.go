@@ -26,9 +26,9 @@ const (
 	ldapSearchEntry    = 0x64
 	ldapSearchDone     = 0x65
 
-	ldapResultSuccess          = 0
-	ldapResultInvalidCreds     = 49
-	ldapResultNoSuchObject     = 32
+	ldapResultSuccess           = 0
+	ldapResultInvalidCreds      = 49
+	ldapResultNoSuchObject      = 32
 	ldapResultUnwillingToPerform = 53
 )
 
@@ -53,8 +53,8 @@ type paiaPatron struct {
 }
 
 type ldapMessage struct {
-	id int
-	op byte
+	id      int
+	op      byte
 	payload []byte
 }
 
@@ -180,14 +180,13 @@ func parseLDAPMessage(data []byte) (ldapMessage, error) {
 	if len(data) < 2 || data[0] != ldapMessageSEQUENCE {
 		return ldapMessage{}, fmt.Errorf("not an LDAP SEQUENCE")
 	}
-	_, next, err := readASN1Element(data, 0)
+	_, _, next, err := readASN1Element(data, 0)
 	if err != nil {
 		return ldapMessage{}, err
 	}
 	if next > len(data) {
 		return ldapMessage{}, fmt.Errorf("truncated LDAP message")
 	}
-	// message content is: INTEGER messageID + protocolOp
 	msgBytes := data[2:next]
 	if len(msgBytes) < 2 {
 		return ldapMessage{}, fmt.Errorf("too short LDAP message")
@@ -196,9 +195,9 @@ func parseLDAPMessage(data []byte) (ldapMessage, error) {
 	if err != nil || idTag != ldapInteger {
 		return ldapMessage{}, fmt.Errorf("missing message ID")
 	}
-	msgID := int(binary.BigEndian.Uint32(append([]byte{0, 0, 0, 0}, idValue...)))
-	if len(idValue) == 1 {
-		msgID = int(idValue[0])
+	msgID := int(idValue[0])
+	if len(idValue) > 1 {
+		msgID = int(binary.BigEndian.Uint32(append([]byte{0, 0, 0, 0}, idValue...)))
 	}
 	if pos >= len(msgBytes) {
 		return ldapMessage{}, fmt.Errorf("missing protocol op")
@@ -211,8 +210,6 @@ func parseLDAPMessage(data []byte) (ldapMessage, error) {
 }
 
 func parseBindRequest(data []byte) (string, string, bool) {
-	// BindRequest = SEQUENCE { version INTEGER, name LDAPDN, authentication CHOICE }
-	// Here we support simple bind auth.
 	if len(data) == 0 {
 		return "", "", false
 	}
@@ -221,7 +218,7 @@ func parseBindRequest(data []byte) (string, string, bool) {
 		return "", "", false
 	}
 	pos := 0
-	_, _, pos, err = readASN1Element(seqValue, pos) // version INTEGER
+	_, _, pos, err = readASN1Element(seqValue, pos)
 	if err != nil {
 		return "", "", false
 	}
@@ -387,7 +384,6 @@ func ldapResultPayload(code int, matchedDN, diagnostic string) []byte {
 }
 
 func ldapEntryPayload(dn string, attrs []ldapAttribute) []byte {
-	// DN is encoded as LDAPString
 	entry := encodeASN1(ldapString, []byte(dn))
 	attrBlock := []byte{}
 	for _, a := range attrs {
